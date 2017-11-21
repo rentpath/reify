@@ -1,0 +1,33 @@
+{
+  "name": "reify",
+  "version": "1.0.0",
+  "description": "Crank out the basic scaffolding necessary for connected React components in AG.js",
+  "main": "index.js",
+  "scripts": {
+    "start": "babel-node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "bin": {
+    "reify": "./index.js"
+  },
+  "keywords": [
+    "React",
+    "Redux",
+    "CLI"
+  ],
+  "author": "Joe Costanzo, RentPath, et al",
+  "license": "ISC",
+  "dependencies": {
+    "chalk": "^2.3.0",
+    "clear": "0.0.1",
+    "clui": "^0.3.6",
+    "figlet": "^1.2.0",
+    "inquirer": "^4.0.0",
+    "preferences": "^1.0.1",
+    "shelljs": "^0.7.8"
+  },
+  "devDependencies": {
+    "babel-cli": "^6.26.0",
+    "babel-preset-latest": "^6.24.1"
+  }
+}
