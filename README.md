@@ -1,4 +1,4 @@
-#Reify Command Line Interface
+# Reify Command Line Interface
 
 Reify CLI (reifycli) is a command line tool that lets developers crank out the basic common scaffolding necessary for connected React components in AG.js.
 
@@ -6,25 +6,26 @@ Brief intro below.
 
 ## Installation
 
-`yarn install` (preferred)
+#### Development
+ - Run `yarn install` (preferred)
 
 or
-`npm install`
+ - Run `npm install`
 
-#### (coming soon)
-```
-npm install -g reify
-```
-This will install the __reify__ executable on your system.
+#### User
+ - Run `npm install -g`
+ - This will install the __reify__ executable on your system.
 
-### Dependencies
+## Dependencies
 
 You'll need to have [node.js](http://nodejs.org/) installed locally to run `reify`.
 
 ## Quickstart
 
-```
-yarn start
-```
+#### To use the CLI
+ - Run `reify`
+ - Follow the prompts to scaffold new React / Redux components in the local project being worked in.
 
-Follow the prompts to scaffold new React / Redux components in the local project being worked in.
+#### For developing the CLI itself
+ - Run `yarn start`
+ - This will run the CLI from the local source files.

@@ -2,13 +2,20 @@
   "name": "reify",
   "version": "1.0.0",
   "description": "Crank out the basic scaffolding necessary for connected React components in AG.js",
-  "main": "index.js",
+  "main": "dist/index.js",
+  "private": true,
   "scripts": {
-    "start": "babel-node index.js",
+    "start": "babel-node src/index.js",
+    "remove-dist": "node_modules/.bin/rimraf ./dist",
+    "prebuild": "npm run remove-dist && mkdirp ./dist",
+    "build": "babel src --presets babel-preset-latest --out-dir dist",
+    "prepublish": "npm run build",
+    "lint": "eslint --ext=.js src test tests",
+    "watch:lint": "esw -w --ext=.js src test",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "bin": {
-    "reify": "./index.js"
+    "reify": "./dist/index.js"
   },
   "keywords": [
     "React",
@@ -27,7 +34,19 @@
     "shelljs": "^0.7.8"
   },
   "devDependencies": {
+    "@rentpath/eslint-config-rentpath": "^3.0.1",
     "babel-cli": "^6.26.0",
-    "babel-preset-latest": "^6.24.1"
+    "babel-eslint": "^8.0.2",
+    "babel-preset-latest": "^6.24.1",
+    "eslint": "^4.11.0",
+    "eslint-loader": "^1.9.0",
+    "eslint-plugin-babel": "^4.1.2",
+    "eslint-plugin-import": "^2.8.0",
+    "eslint-plugin-jsx-a11y": "6.0.2",
+    "eslint-plugin-mocha": "^4.11.0",
+    "eslint-plugin-react": "^7.5.1",
+    "eslint-watch": "^3.1.3",
+    "mkdirp": "^0.5.1",
+    "rimraf": "^2.6.2"
   }
 }
