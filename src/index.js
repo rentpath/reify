@@ -33,9 +33,12 @@ function promptInput(previous, callback) {
       default: previous ? previous.app : null,
       validate: value => {
         if (value.length) {
+          if (value.length > 1) {
+            return 'Please limit choice to one selection.'
+          }
           return true
         }
-        return 'Please choose app to create component within.'
+        return 'Please choose an app to create component within.'
       },
     },
     {
@@ -68,113 +71,126 @@ function promptInput(previous, callback) {
   inquirer.prompt(questions).then(callback)
 }
 
-function getUserInput(callback) {
-  const prefs = new Preferences('reify')
+function setupDirs(input, dirs, callback) {
+  dirs.forEach(dir => {
+    const dirPath = `./src/apps/${input.app}/${input.name}/${dir}`
 
-  logger.log('debug', `Reify prefs. ${JSON.stringify(prefs.saved)}`)
-
-  promptInput(prefs.saved && prefs.saved.previous, items => {
-    const status = new Spinner('Storing prefs, please wait...')
-    status.start()
-    if (items) {
-      prefs.saved = { previous: items }
-      logger.log('debug', `items stored: ${JSON.stringify(items)}`)
+    if (files.directoryExists(dirPath)) {
+      logger.log('error', chalk.red(`ERR: Already have that directory! ${dir}`))
+      process.exit()
     }
-    status.stop()
-    return callback(null, items)
+    shell.mkdir('-p', dirPath)
   })
+  callback(null, dirs)
 }
 
-function createDirs(input, callback) {
+function promptDirs(previous, input, callback) {
   inquirer.prompt(
     [
       {
         type: 'checkbox',
         name: 'dirs',
-        message: 'Select the folders you wish to create:',
+        message: 'Select the directories you wish to create:',
         choices: dirList,
-        default: ['components'],
+        default: previous || ['components'],
       },
     ]
   ).then(answer => {
     if (answer.dirs.length) {
-      answer.dirs.forEach(dir => {
-        const dirPath = `./src/apps/${input.app}/${input.name}/${dir}`
-
-        if (files.directoryExists(dirPath)) {
-          logger.log('error', chalk.red(`ERR: Already have that directory! ${dir}`))
-          process.exit()
-        }
-        shell.mkdir('-p', dirPath)
-      })
-      return callback(null, answer.dirs)
+      setupDirs(input, answer.dirs, callback)
+      return
     }
     logger.log('info', 'nothing to do.')
-    return callback(null)
+    callback(null)
   })
 }
 
-function createComponent(input, dirs, callback) {
-  if (dirs.length) {
-    dirs.forEach(dir => {
-      const dirPath = `./src/apps/${input.app}/${input.name}/${dir}`
+function getUserInput(callback) {
+  const prefs = new Preferences('reify')
 
-      if (!files.directoryExists(dirPath)) {
-        logger.log('error', chalk.red(`ERR: That directory didn't exist! ${dir}`))
-        process.exit()
+  logger.log('debug', `Reify prefs. ${JSON.stringify(prefs.saved)}`)
+
+  promptInput(prefs.saved && prefs.saved.input, input => {
+    if (input) {
+      promptDirs(prefs.saved && prefs.saved.dirs, input, (err, dirs) => {
+        if (dirs) {
+          const status = new Spinner('Storing prefs, please wait...')
+          status.start()
+          prefs.saved = { input, dirs }
+          logger.log('debug', `items stored: ${JSON.stringify(prefs.saved)}`)
+          status.stop()
+          callback(null, input, dirs)
+          return
+        }
+        callback('No dirs created.')
+      })
+      return
+    }
+    callback('No inputs obtained.')
+  })
+}
+
+function createComponent(input, dir, callback) {
+  const dirPath = `./src/apps/${input.app}/${input.name}/${dir}`
+
+  if (!files.directoryExists(dirPath)) {
+    logger.log('error', chalk.red(`ERR: That directory didn't exist! ${dir}`))
+    process.exit()
+  }
+  fs.writeFileSync(`${dirPath}/${input.name}.js`, boilerPlate(input))
+  callback(null)
+}
+
+function generateFiles(input, dirs, callback) {
+  if (dirs.length) {
+    const status = new Spinner('Generating the files...')
+    status.start()
+    dirs.forEach(dir => {
+      if (dir === 'components') {
+        createComponent(input, dir, err => {
+          if (err) {
+            callback(err)
+          }
+        })
       }
-      fs.writeFileSync(`${dirPath}/${input.name}.js`, boilerPlate(input))
     })
-    return callback(null)
+    status.stop()
+    callback(null)
+    return
   }
   logger.log('info', 'nothing to do.')
-  return callback(null)
-}
-
-function setupFiles(input, dirs, callback) {
-  const status = new Spinner('Setting up the files...')
-  status.start()
-  createComponent(input, dirs, err => {
-    status.stop()
-    if (err) {
-      return callback(err)
-    }
-    return callback(null)
-  })
+  callback(null)
 }
 
 function start(callback) {
-  getUserInput((err, input) => {
+  getUserInput((err, input, dirs) => {
     if (err) {
-      return callback(err)
+      callback(err)
+      return
     }
-    return callback(null, input)
+    callback(null, input, dirs)
   })
 }
 
-start((err, input) => {
+start((err, input, dirs) => {
   if (err) {
     logger.log('error', chalk.red(`Broke on start. ${JSON.stringify(err)}`))
     process.exit()
   }
-  if (input) {
-    logger.log('info', chalk.green('Successfully took input!'))
-    createDirs(input, (_err, dirs) => {
-      if (_err) {
-        logger.log('error', chalk.red(`Broke on dir creation. ${JSON.stringify(_err)}`))
+  if (!input || !dirs) {
+    logger.log('error', chalk.red('Broke on user input.'))
+    process.exit()
+  }
+  if (input && dirs) {
+    logger.log('info', chalk.green('Inputs accepted!'))
+    logger.log('info', chalk.green('Successfully scaffolded dir(s)!'))
+    generateFiles(input, dirs, __err => {
+      if (__err) {
+        logger.log('error', chalk.red(`Broke on file generation. ${JSON.stringify(__err)}`))
         process.exit()
       }
-      if (dirs) {
-        logger.log('info', chalk.green('Successfully scaffolded dir(s)!'))
-        setupFiles(input, dirs, __err => {
-          if (__err) {
-            logger.log('error', chalk.red(`Broke on file setup. ${JSON.stringify(__err)}`))
-            process.exit()
-          }
-          if (!__err) {
-            logger.log('info', chalk.green('Successfully cranked out component(s)!'))
-          }
-        })
+      if (!__err) {
+        logger.log('info', chalk.green('Successfully cranked out component(s)!'))
       }
     })
   }

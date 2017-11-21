@@ -10,6 +10,7 @@ Brief intro below.
  - Run `yarn install` (preferred)
 
 or
+
  - Run `npm install`
 
 #### User
