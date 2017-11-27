@@ -1,8 +1,8 @@
-const boilerPlate = input => (`\
+const component = opts => (`\
 import PropTypes from 'prop-types'
 import React, { PureComponent } from 'react'
 
-export default class ${input.name} extends PureComponent {
+export default class ${opts.componentName} extends PureComponent {
   static propTypes = {}
 
   constructor(props) {
@@ -16,4 +16,4 @@ export default class ${input.name} extends PureComponent {
 }
 `)
 
-export default boilerPlate
+export default component
