@@ -7,9 +7,10 @@ import inquirer from 'inquirer'
 import Preferences from 'preferences'
 import shell from 'shelljs'
 import fs from 'fs'
-// import standardIndex from './boilerPlate/standard/index'
 import { defineBaseAppPath, defineStandardAppNames, defineAppList } from './messages/snippets'
+import standardIndex from './boilerPlate/standard/index'
 import standardComponent from './boilerPlate/standard/component'
+import standardContainer from './boilerPlate/standard/container'
 import files from './lib/files'
 import logger from './lib/logger'
 
@@ -233,14 +234,12 @@ function getUserInput(callback) {
   })
 }
 
-function createComponent(input, dir, callback) {
-  const dirPath = `${baseAppPath}${input.appName}${input.componentName}/${dir}`
-
+function createComponent(dirPath, fileName, component, callback) {
   if (!files.directoryExists(dirPath)) {
-    logger.log('error', chalk.red(`ERR: That directory didn't exist! ${dir}`))
+    logger.log('error', chalk.red(`ERR: That directory didn't exist! ${dirPath}`))
     process.exit()
   }
-  fs.writeFileSync(`${dirPath}/${input.componentName}.js`, standardComponent(input))
+  fs.writeFileSync(`${dirPath}/${fileName}.js`, component)
   callback(null)
 }
 
@@ -250,15 +249,29 @@ function generateFiles(input, dirs, callback) {
     status.start()
     dirs.forEach(dir => {
       if (dir === 'components') {
-        createComponent(input, dir, err => {
+        const dirPath = `${baseAppPath}${input.appName}${input.componentName}/${dir}`
+        createComponent(dirPath, input.componentName, standardComponent(input), err => {
           if (err) {
             callback(err)
           }
         })
       }
     })
-    status.stop()
-    callback(null)
+    const dirPath = `${baseAppPath}${input.appName}${input.componentName}/`
+    createComponent(dirPath, 'index', standardIndex(input), err0 => {
+      if (err0) {
+        callback(err0)
+        return
+      }
+      createComponent(dirPath, 'container', standardContainer(input), err1 => {
+        if (err1) {
+          callback(err1)
+          return
+        }
+        status.stop()
+        callback(null)
+      })
+    })
     return
   }
   logger.log('info', 'nothing to do.')
