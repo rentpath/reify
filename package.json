@@ -23,7 +23,7 @@
     "CLI"
   ],
   "author": "Joe Costanzo, RentPath, et al",
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
     "babel-preset-stage-0": "^6.24.1",
     "chalk": "^2.3.0",
