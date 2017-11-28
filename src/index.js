@@ -70,96 +70,101 @@ function postDefinitionSteps(input0, previous, callback) {
       },
     },
   ]
-  inquirer.prompt(questions).then(input1 => callback({ ...input0, ...input1, }))
+  inquirer.prompt(questions).then(input1 => callback({ ...input0, ...input1 }))
 }
 
 function definitionStepOne(input0, previous, callback0) {
-    inquirer.prompt({
-      name: 'defineStandardApps',
-      type: 'confirm',
-      message: defineStandardAppNames(previous && previous.appList ? previous.appList : appList),
-      default: false,
-    }).then(input1 => {
-      const promptRecursive = (input2, callback1) => {
-        inquirer.prompt({
-          name: 'standardApp',
-          type: 'input',
-          message: `Type an appName as a standard choice.`,
-          default: 'genericAppName',
-          validate: value => {
-            if (value.length) {
-              return true
-            }
-            return 'Please type a valid appName.'
-          },
-        }).then(input3 => {
-          const aggregate = { ...input2, ...input3, }
-          if (aggregate.appList === undefined) {
-            aggregate.appList = []
+  inquirer.prompt({
+    name: 'defineStandardApps',
+    type: 'confirm',
+    message: defineStandardAppNames(previous && previous.appList ? previous.appList : appList),
+    default: false,
+  }).then(input1 => {
+    const promptRecursive = (input2, callback1) => {
+      inquirer.prompt({
+        name: 'standardApp',
+        type: 'input',
+        message: 'Type an appName as a standard choice.',
+        default: 'genericAppName',
+        validate: value => {
+          if (value.length) {
+            return true
           }
-          aggregate.appList.push(aggregate.standardApp)
-          inquirer.prompt([
-            {
-              type: 'checkbox',
-              name: 'addAnother',
-              message: defineAppList(aggregate.appList),
-              choices: ['Yes, add more appNames.', 'No, the list is fully populated. Move to next step.'],
-              default: 'No, the list is fully populated. Move to next step.',
-              validate: value => {
-                if (value.length) {
-                  if (value.length > 1) {
-                    return 'Please limit choice to one selection.'
-                  }
-                  return true
+          return 'Please type a valid appName.'
+        },
+      }).then(input3 => {
+        const aggregate = { ...input2, ...input3 }
+
+        if (aggregate.appList === undefined) {
+          aggregate.appList = []
+        }
+        aggregate.appList.push(aggregate.standardApp)
+        inquirer.prompt([
+          {
+            type: 'checkbox',
+            name: 'addAnother',
+            message: defineAppList(aggregate.appList),
+            choices: ['Yes, add more appNames.', 'No, the list is fully populated. Move to next step.'],
+            default: 'No, the list is fully populated. Move to next step.',
+            validate: value => {
+              if (value.length) {
+                if (value.length > 1) {
+                  return 'Please limit choice to one selection.'
                 }
-                return 'Please choose to keep adding appNames or move on.'
+                return true
               }
+              return 'Please choose to keep adding appNames or move on.'
             },
-          ]).then(input4 => callback1({ ...aggregate, ...input4 }))
-        })
-      }
-      const fireRecursion = (inp, cb) => {
-        promptRecursive(inp, input5 => {
-          if (input5.addAnother[0] === 'Yes, add more appNames.') {
-            cb(input5, cb)
-            return
-          }
-          appList = input5.appList
-          postDefinitionSteps(input5, previous, callback0)
-        })
-      }
-      if (input1.defineStandardApps) {
-        fireRecursion({ ...input0, ...input1 }, fireRecursion)
-        return
-      }
-      postDefinitionSteps({ ...input0, ...input1 }, previous, callback0)
-    })
+          },
+        ]).then(input4 => callback1({ ...aggregate, ...input4 }))
+      })
+    }
+
+    const fireRecursion = (inp, cb) => {
+      promptRecursive(inp, input5 => {
+        if (input5.addAnother[0] === 'Yes, add more appNames.') {
+          cb(input5, cb)
+          return
+        }
+        appList = input5.appList
+        postDefinitionSteps(input5, previous, callback0)
+      })
+    }
+
+    if (input1.defineStandardApps) {
+      fireRecursion({ ...input0, ...input1 }, fireRecursion)
+      return
+    }
+    postDefinitionSteps({ ...input0, ...input1 }, previous, callback0)
+  })
 }
 
 function promptInput(previous, callback) {
   inquirer.prompt({
-      name: 'defineBaseAppPath',
-      type: 'confirm',
-      message: defineBaseAppPath(previous && previous.baseAppPath ? previous.baseAppPath : baseAppPath),
-      default: false,
-    }).then(input => {
-      if (input.defineBaseAppPath) {
-        inquirer.prompt({
-          name: 'baseAppPath',
-          type: 'input',
-          message: `Type a valid path starting with './' and ending with '/', to use as the base directory for adding new components.`,
-          default: previous ? previous.baseAppPath : './...',
-          validate: value => {
-            if (value.length && value.length > 1 && value.substring(0, 2) === './' && value.slice(-1) === '/') {
-              return true
-            }
-            return 'Please input a valid path.'
-          },
-        }).then(optInput => definitionStepOne({ ...input, ...optInput }, previous, callback))
-        return
-      }
-      definitionStepOne(input, previous, callback)
-    })
+    name: 'defineBaseAppPath',
+    type: 'confirm',
+    message: defineBaseAppPath(
+      previous && previous.baseAppPath ? previous.baseAppPath : baseAppPath
+    ),
+    default: false,
+  }).then(input => {
+    if (input.defineBaseAppPath) {
+      inquirer.prompt({
+        name: 'baseAppPath',
+        type: 'input',
+        message: 'Type a valid path starting with "./" and ending with "/", to use as the base directory for adding new components.',
+        default: previous ? previous.baseAppPath : './...',
+        validate: value => {
+          if (value.length && value.length > 1 && value.substring(0, 2) === './' && value.slice(-1) === '/') {
+            return true
+          }
+          return 'Please input a valid path.'
+        },
+      }).then(optInput => definitionStepOne({ ...input, ...optInput }, previous, callback))
+      return
+    }
+    definitionStepOne(input, previous, callback)
+  })
 }
 
 function setupDirs(input, dirs, callback) {
