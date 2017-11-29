@@ -7,17 +7,22 @@ import inquirer from 'inquirer'
 import Preferences from 'preferences'
 import shell from 'shelljs'
 import fs from 'fs'
-import { defineBaseAppPath, defineStandardAppNames, defineAppList } from './messages/snippets'
-import standardIndex from './boilerPlate/standard/index'
-import standardComponent from './boilerPlate/standard/component'
-import standardContainer from './boilerPlate/standard/container'
+import { defineBaseAppPath, promptAppDomainChoices, promptAppDomain } from './messages'
+import {
+  _index,
+  _component,
+  _container,
+  _const,
+  _actions,
+  _reducer,
+} from './templates'
 import files from './lib/files'
 import logger from './lib/logger'
 
 const Spinner = CLI.Spinner
-const dirList = ['actions', 'components', 'selectors', 'const', '__tests__']
-const typeList = ['connected']
-let appList = ['small/', 'large/', 'shared/']
+const functionTypesChoices = ['actions', 'components', 'const', 'container', 'index', 'reducer', 'selectors', '__tests__']
+const componentTypesChoices = ['functional', 'class', 'connected']
+let appDomainChoices = ['small/', 'large/', 'shared/']
 let baseAppPath = './src/apps/'
 
 clear()
@@ -27,48 +32,60 @@ console.log(
   )
 )
 
+const makeValidator = opts => {
+  return value => {
+    const conditional = opts.specialRule ? opts.specialRule(value) : value.length
+
+    if (conditional) {
+      if (opts.nestedMessage && conditional > 1) {
+        return opts.nestedMessage
+      }
+      return true
+    }
+    return opts.message
+  }
+}
+
+function handleErr(err, msg) {
+  if (err) {
+    logger.log('error', chalk.red(`${msg} ${JSON.stringify(err)}`))
+    process.exit()
+  }
+}
+
 function postDefinitionSteps(input0, previous, callback) {
+  if (previous.appDomainChoices) {
+    appDomainChoices = previous.appDomainChoices
+  }
+  if (input0.appDomainChoices) {
+    appDomainChoices = input0.appDomainChoices
+  }
   const questions = [
     {
-      name: 'appName',
+      name: 'appDomain',
       type: 'checkbox',
-      message: 'Choose appName',
-      choices: appList,
-      default: previous ? previous.appName : null,
-      validate: value => {
-        if (value.length) {
-          if (value.length > 1) {
-            return 'Please limit choice to one selection.'
-          }
-          return true
-        }
-        return 'Please choose an app to create component within.'
-      },
+      message: 'Choose an appDomain',
+      choices: appDomainChoices,
+      default: previous ? previous.appDomain : null,
+      validate: makeValidator({
+        message: 'Please choose an app domain to create component within.',
+        nestedMessage: 'Please limit choice to one selection.',
+      }),
     },
     {
       name: 'componentName',
       type: 'input',
-      message: 'Input component name:',
+      message: 'Input a component name:',
       default: previous ? previous.componentName : null,
-      validate: value => {
-        if (value.length) {
-          return true
-        }
-        return 'Please input a component name.'
-      },
+      validate: makeValidator({ message: 'No name input was entered. Please try again.' }),
     },
     {
-      name: 'type',
+      name: 'componentType',
       type: 'checkbox',
-      message: 'What type of component do you want? :',
-      choices: typeList,
-      default: previous ? previous.type : null,
-      validate: value => {
-        if (value.length) {
-          return true
-        }
-        return 'Please enter what type of component you want.'
-      },
+      message: 'What component type should be used? :',
+      choices: componentTypesChoices,
+      default: previous ? previous.componentType : null,
+      validate: makeValidator({ message: 'Please select what component type you want.' }),
     },
   ]
   inquirer.prompt(questions).then(input1 => callback({ ...input0, ...input1 }))
@@ -78,44 +95,36 @@ function definitionStepOne(input0, previous, callback0) {
   inquirer.prompt({
     name: 'defineStandardApps',
     type: 'confirm',
-    message: defineStandardAppNames(previous && previous.appList ? previous.appList : appList),
+    message: promptAppDomainChoices(
+      previous && previous.appDomainChoices ? previous.appDomainChoices : appDomainChoices
+    ),
     default: false,
   }).then(input1 => {
     const promptRecursive = (input2, callback1) => {
       inquirer.prompt({
         name: 'standardApp',
         type: 'input',
-        message: 'Type an appName as a standard choice.',
-        default: 'genericAppName',
-        validate: value => {
-          if (value.length) {
-            return true
-          }
-          return 'Please type a valid appName.'
-        },
+        message: 'Input an appDomain name, which will be added to the choices.',
+        default: 'genericAppDomainName',
+        validate: makeValidator({ message: 'No appDomain input was entered. Please try again.' }),
       }).then(input3 => {
         const aggregate = { ...input2, ...input3 }
 
-        if (aggregate.appList === undefined) {
-          aggregate.appList = []
+        if (aggregate.appDomainChoices === undefined) {
+          aggregate.appDomainChoices = []
         }
-        aggregate.appList.push(aggregate.standardApp)
+        aggregate.appDomainChoices.push(aggregate.standardApp)
         inquirer.prompt([
           {
             type: 'checkbox',
             name: 'addAnother',
-            message: defineAppList(aggregate.appList),
-            choices: ['Yes, add more appNames.', 'No, the list is fully populated. Move to next step.'],
+            message: promptAppDomain(aggregate.appDomainChoices),
+            choices: ['Yes, add more appDomains.', 'No, the list is fully populated. Move to next step.'],
             default: 'No, the list is fully populated. Move to next step.',
-            validate: value => {
-              if (value.length) {
-                if (value.length > 1) {
-                  return 'Please limit choice to one selection.'
-                }
-                return true
-              }
-              return 'Please choose to keep adding appNames or move on.'
-            },
+            validate: makeValidator({
+              message: 'Please choose to keep adding appDomains or move on.',
+              nestedMessage: 'Please limit choice to one selection.',
+            }),
           },
         ]).then(input4 => callback1({ ...aggregate, ...input4 }))
       })
@@ -123,11 +132,10 @@ function definitionStepOne(input0, previous, callback0) {
 
     const fireRecursion = (inp, cb) => {
       promptRecursive(inp, input5 => {
-        if (input5.addAnother[0] === 'Yes, add more appNames.') {
+        if (input5.addAnother[0] === 'Yes, add more appDomains.') {
           cb(input5, cb)
           return
         }
-        appList = input5.appList
         postDefinitionSteps(input5, previous, callback0)
       })
     }
@@ -155,12 +163,10 @@ function promptInput(previous, callback) {
         type: 'input',
         message: 'Type a valid path starting with "./" and ending with "/", to use as the base directory for adding new components.',
         default: previous ? previous.baseAppPath : './...',
-        validate: value => {
-          if (value.length && value.length > 1 && value.substring(0, 2) === './' && value.slice(-1) === '/') {
-            return true
-          }
-          return 'Please input a valid path.'
-        },
+        validate: makeValidator({
+          message: 'Please input a valid path.',
+          specialRule: value => value.length && value.length > 1 && value.substring(0, 2) === './' && value.slice(-1) === '/',
+        }),
       }).then(optInput => definitionStepOne({ ...input, ...optInput }, previous, callback))
       return
     }
@@ -168,37 +174,34 @@ function promptInput(previous, callback) {
   })
 }
 
-function setupDirs(input, dirs, callback) {
-  dirs.forEach(dir => {
-    const dirPath = `${baseAppPath}${input.appName}${input.componentName}/${dir}`
+function setupFunctionTypes(input, functionTypes, callback) {
+  const componentPath = `${baseAppPath}${input.appDomain}${input.componentName}`
+  handleErr(files.directoryExists(componentPath), `ERR: Already have that component! ${componentPath}`)
+  shell.mkdir('-p', componentPath)
 
-    if (files.directoryExists(dirPath)) {
-      logger.log('error', chalk.red(`ERR: Already have that directory! ${dir}`))
-      process.exit()
+  functionTypes.forEach(functionType => {
+    if (functionType === 'components') {
+      const functionTypePath = `${componentPath}/${functionType}`
+      handleErr(files.directoryExists(functionTypePath), `ERR: Already have that function type! ${functionType}`)
+      shell.mkdir('-p', functionTypePath)
     }
-    shell.mkdir('-p', dirPath)
   })
-  callback(null, dirs)
+  callback(null, functionTypes)
 }
 
-function promptDirs(previous, input, callback) {
+function promptFunctionTypes(previous, input, callback) {
   inquirer.prompt([
     {
       type: 'checkbox',
-      name: 'dirs',
-      message: 'Select the directories you wish to create:',
-      choices: dirList,
+      name: 'functionTypes',
+      message: 'Select the function types you wish to include:',
+      choices: functionTypesChoices,
       default: previous || ['components'],
-      validate: value => {
-        if (value.length) {
-          return true
-        }
-        return 'Please choose a directory or several.'
-      },
+      validate: makeValidator({ message: 'Please choose a function type or several.' }),
     },
   ]).then(answer => {
-    if (answer.dirs.length) {
-      setupDirs(input, answer.dirs, callback)
+    if (answer.functionTypes.length) {
+      setupFunctionTypes(input, answer.functionTypes, callback)
       return
     }
     logger.log('info', 'nothing to do.')
@@ -213,20 +216,23 @@ function getUserInput(callback) {
 
   promptInput(prefs.saved && prefs.saved.input, input => {
     if (input) {
+      if (prefs.saved && prefs.saved.input && prefs.saved.input.baseAppPath) {
+        baseAppPath = prefs.saved.input.baseAppPath
+      }
       if (input.defineBaseAppPath && input.baseAppPath) {
         baseAppPath = input.baseAppPath
       }
-      promptDirs(prefs.saved && prefs.saved.dirs, input, (err, dirs) => {
-        if (dirs) {
+      promptFunctionTypes(prefs.saved && prefs.saved.functionTypes, input, (err, functionTypes) => {
+        if (functionTypes) {
           const status = new Spinner('Storing prefs, please wait...')
           status.start()
-          prefs.saved = { input, dirs }
+          prefs.saved = { input, functionTypes }
           logger.log('debug', `items stored: ${JSON.stringify(prefs.saved)}`)
           status.stop()
-          callback(null, input, dirs)
+          callback(null, input, functionTypes)
           return
         }
-        callback('No dirs created.')
+        callback('No function types created.')
       })
       return
     }
@@ -234,42 +240,57 @@ function getUserInput(callback) {
   })
 }
 
-function createComponent(dirPath, fileName, component, callback) {
-  if (!files.directoryExists(dirPath)) {
-    logger.log('error', chalk.red(`ERR: That directory didn't exist! ${dirPath}`))
-    process.exit()
-  }
-  fs.writeFileSync(`${dirPath}/${fileName}.js`, component)
+function createComponent(functionTypePath, fileName, component, callback) {
+  handleErr(files.directoryExists(!files.directoryExists(functionTypePath)), `ERR: That directory didn't exist! ${functionTypePath}`)
+  fs.writeFileSync(`${functionTypePath}/${fileName}.js`, component)
   callback(null)
 }
 
-function generateFiles(input, dirs, callback) {
-  if (dirs.length) {
+function generateFiles(input, functionTypes, callback) {
+  if (functionTypes.length) {
     const status = new Spinner('Generating the files...')
     status.start()
-    dirs.forEach(dir => {
-      if (dir === 'components') {
-        const dirPath = `${baseAppPath}${input.appName}${input.componentName}/${dir}`
-        createComponent(dirPath, input.componentName, standardComponent(input), err => {
+    functionTypes.forEach(functionType => {
+      if (functionType === 'components') {
+        const functionTypePath = `${baseAppPath}${input.appDomain}${input.componentName}/${functionType}`
+        createComponent(functionTypePath, input.componentName, _component(input), err => {
           if (err) {
             callback(err)
           }
         })
       }
     })
-    const dirPath = `${baseAppPath}${input.appName}${input.componentName}/`
-    createComponent(dirPath, 'index', standardIndex(input), err0 => {
+    const functionTypePath = `${baseAppPath}${input.appDomain}${input.componentName}/`
+    createComponent(functionTypePath, 'index', _index(input), err0 => {
       if (err0) {
         callback(err0)
         return
       }
-      createComponent(dirPath, 'container', standardContainer(input), err1 => {
+      createComponent(functionTypePath, 'container', _container(input), err1 => {
         if (err1) {
           callback(err1)
           return
         }
-        status.stop()
-        callback(null)
+        createComponent(functionTypePath, 'const', _const(input), err2 => {
+          if (err2) {
+            callback(err2)
+            return
+          }
+          createComponent(functionTypePath, 'actions', _actions(), err3 => {
+            if (err3) {
+              callback(err3)
+              return
+            }
+            createComponent(functionTypePath, 'reducer', _reducer(), err4 => {
+              if (err4) {
+                callback(err4)
+                return
+              }
+              status.stop()
+              callback(null)
+            })
+          })
+        })
       })
     })
     return
@@ -279,32 +300,23 @@ function generateFiles(input, dirs, callback) {
 }
 
 function start(callback) {
-  getUserInput((err, input, dirs) => {
+  getUserInput((err, input, functionTypes) => {
     if (err) {
       callback(err)
       return
     }
-    callback(null, input, dirs)
+    callback(null, input, functionTypes)
   })
 }
 
-start((err, input, dirs) => {
-  if (err) {
-    logger.log('error', chalk.red(`Broke on start. ${JSON.stringify(err)}`))
-    process.exit()
-  }
-  if (!input || !dirs) {
-    logger.log('error', chalk.red('Broke on user input.'))
-    process.exit()
-  }
-  if (input && dirs) {
+start((err, input, functionTypes) => {
+  handleErr(err, 'Broke on start.')
+  handleErr(!input || !functionTypes, 'Broke on user input.')
+  if (input && functionTypes) {
     logger.log('info', chalk.green('Inputs accepted!'))
-    logger.log('info', chalk.green('Successfully scaffolded dir(s)!'))
-    generateFiles(input, dirs, __err => {
-      if (__err) {
-        logger.log('error', chalk.red(`Broke on file generation. ${JSON.stringify(__err)}`))
-        process.exit()
-      }
+    logger.log('info', chalk.green('Successfully scaffolded function type(s)!'))
+    generateFiles(input, functionTypes, __err => {
+      handleErr(__err, 'Broke on component generation.')
       if (!__err) {
         logger.log('info', chalk.green('Successfully cranked out component(s)!'))
       }
