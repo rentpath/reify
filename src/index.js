@@ -20,7 +20,7 @@ import files from './lib/files'
 import logger from './lib/logger'
 
 const Spinner = CLI.Spinner
-const functionTypesChoices = ['actions', 'components', 'const', 'container', 'index', 'reducer', 'selectors', '__tests__']
+const functionalTypesChoices = ['actions', 'components', 'const', 'container', 'index', 'reducer', 'selectors', '__tests__']
 const componentTypesChoices = ['functional', 'class', 'connected']
 let appDomainChoices = ['small/', 'large/', 'shared/']
 let baseAppPath = './src/apps/'
@@ -32,19 +32,17 @@ console.log(
   )
 )
 
-const makeValidator = opts => {
-  return value => {
-    const conditional = opts.specialRule ? opts.specialRule(value) : value.length
+const makeValidator = opts => (value => {
+  const conditional = opts.specialRule ? opts.specialRule(value) : value.length
 
-    if (conditional) {
-      if (opts.nestedMessage && conditional > 1) {
-        return opts.nestedMessage
-      }
-      return true
+  if (conditional) {
+    if (opts.nestedMessage && conditional > 1) {
+      return opts.nestedMessage
     }
-    return opts.message
+    return true
   }
-}
+  return opts.message
+})
 
 function handleErr(err, msg) {
   if (err) {
@@ -53,7 +51,7 @@ function handleErr(err, msg) {
   }
 }
 
-function postDefinitionSteps(input0, previous, callback) {
+function postInput(input0, previous, callback) {
   if (previous.appDomainChoices) {
     appDomainChoices = previous.appDomainChoices
   }
@@ -91,7 +89,7 @@ function postDefinitionSteps(input0, previous, callback) {
   inquirer.prompt(questions).then(input1 => callback({ ...input0, ...input1 }))
 }
 
-function definitionStepOne(input0, previous, callback0) {
+function promptInputOne(input0, previous, callback0) {
   inquirer.prompt({
     name: 'defineStandardApps',
     type: 'confirm',
@@ -136,7 +134,7 @@ function definitionStepOne(input0, previous, callback0) {
           cb(input5, cb)
           return
         }
-        postDefinitionSteps(input5, previous, callback0)
+        postInput(input5, previous, callback0)
       })
     }
 
@@ -144,11 +142,11 @@ function definitionStepOne(input0, previous, callback0) {
       fireRecursion({ ...input0, ...input1 }, fireRecursion)
       return
     }
-    postDefinitionSteps({ ...input0, ...input1 }, previous, callback0)
+    postInput({ ...input0, ...input1 }, previous, callback0)
   })
 }
 
-function promptInput(previous, callback) {
+function promptInputZero(previous, callback) {
   inquirer.prompt({
     name: 'defineBaseAppPath',
     type: 'confirm',
@@ -167,41 +165,41 @@ function promptInput(previous, callback) {
           message: 'Please input a valid path.',
           specialRule: value => value.length && value.length > 1 && value.substring(0, 2) === './' && value.slice(-1) === '/',
         }),
-      }).then(optInput => definitionStepOne({ ...input, ...optInput }, previous, callback))
+      }).then(optInput => promptInputOne({ ...input, ...optInput }, previous, callback))
       return
     }
-    definitionStepOne(input, previous, callback)
+    promptInputOne(input, previous, callback)
   })
 }
 
-function setupFunctionTypes(input, functionTypes, callback) {
+function setupFunctionalTypes(input, functionalTypes, callback) {
   const componentPath = `${baseAppPath}${input.appDomain}${input.componentName}`
   handleErr(files.directoryExists(componentPath), `ERR: Already have that component! ${componentPath}`)
   shell.mkdir('-p', componentPath)
 
-  functionTypes.forEach(functionType => {
-    if (functionType === 'components') {
-      const functionTypePath = `${componentPath}/${functionType}`
-      handleErr(files.directoryExists(functionTypePath), `ERR: Already have that function type! ${functionType}`)
-      shell.mkdir('-p', functionTypePath)
+  functionalTypes.forEach(functionalType => {
+    if (functionalType === 'components') {
+      const functionalTypePath = `${componentPath}/${functionalType}`
+      handleErr(files.directoryExists(functionalTypePath), `ERR: Already have that functional type! ${functionalType}`)
+      shell.mkdir('-p', functionalTypePath)
     }
   })
-  callback(null, functionTypes)
+  callback(null, functionalTypes)
 }
 
-function promptFunctionTypes(previous, input, callback) {
+function promptFunctionalTypes(previous, input, callback) {
   inquirer.prompt([
     {
       type: 'checkbox',
-      name: 'functionTypes',
-      message: 'Select the function types you wish to include:',
-      choices: functionTypesChoices,
+      name: 'functionalTypes',
+      message: 'Select the functional types you wish to be created:',
+      choices: functionalTypesChoices,
       default: previous || ['components'],
-      validate: makeValidator({ message: 'Please choose a function type or several.' }),
+      validate: makeValidator({ message: 'Please choose a functional type or several.' }),
     },
   ]).then(answer => {
-    if (answer.functionTypes.length) {
-      setupFunctionTypes(input, answer.functionTypes, callback)
+    if (answer.functionalTypes.length) {
+      setupFunctionalTypes(input, answer.functionalTypes, callback)
       return
     }
     logger.log('info', 'nothing to do.')
@@ -214,7 +212,7 @@ function getUserInput(callback) {
 
   logger.log('debug', `Reify prefs. ${JSON.stringify(prefs.saved)}`)
 
-  promptInput(prefs.saved && prefs.saved.input, input => {
+  promptInputZero(prefs.saved && prefs.saved.input, input => {
     if (input) {
       if (prefs.saved && prefs.saved.input && prefs.saved.input.baseAppPath) {
         baseAppPath = prefs.saved.input.baseAppPath
@@ -222,66 +220,70 @@ function getUserInput(callback) {
       if (input.defineBaseAppPath && input.baseAppPath) {
         baseAppPath = input.baseAppPath
       }
-      promptFunctionTypes(prefs.saved && prefs.saved.functionTypes, input, (err, functionTypes) => {
-        if (functionTypes) {
-          const status = new Spinner('Storing prefs, please wait...')
-          status.start()
-          prefs.saved = { input, functionTypes }
-          logger.log('debug', `items stored: ${JSON.stringify(prefs.saved)}`)
-          status.stop()
-          callback(null, input, functionTypes)
-          return
+      promptFunctionalTypes(
+        prefs.saved && prefs.saved.functionalTypes,
+        input,
+        (err, functionalTypes) => {
+          if (functionalTypes) {
+            const status = new Spinner('Storing prefs, please wait...')
+            status.start()
+            prefs.saved = { input, functionalTypes }
+            logger.log('debug', `items stored: ${JSON.stringify(prefs.saved)}`)
+            status.stop()
+            callback(null, input, functionalTypes)
+            return
+          }
+          callback('No functional types created.')
         }
-        callback('No function types created.')
-      })
+      )
       return
     }
     callback('No inputs obtained.')
   })
 }
 
-function createComponent(functionTypePath, fileName, component, callback) {
-  handleErr(files.directoryExists(!files.directoryExists(functionTypePath)), `ERR: That directory didn't exist! ${functionTypePath}`)
-  fs.writeFileSync(`${functionTypePath}/${fileName}.js`, component)
+function createComponent(functionalTypePath, fileName, component, callback) {
+  handleErr(files.directoryExists(!files.directoryExists(functionalTypePath)), `ERR: That directory didn't exist! ${functionalTypePath}`)
+  fs.writeFileSync(`${functionalTypePath}/${fileName}.js`, component)
   callback(null)
 }
 
-function generateFiles(input, functionTypes, callback) {
-  if (functionTypes.length) {
+function generateFiles(input, functionalTypes, callback) {
+  if (functionalTypes.length) {
     const status = new Spinner('Generating the files...')
     status.start()
-    functionTypes.forEach(functionType => {
-      if (functionType === 'components') {
-        const functionTypePath = `${baseAppPath}${input.appDomain}${input.componentName}/${functionType}`
-        createComponent(functionTypePath, input.componentName, _component(input), err => {
+    functionalTypes.forEach(functionalType => {
+      if (functionalType === 'components') {
+        const functionalTypePath = `${baseAppPath}${input.appDomain}${input.componentName}/${functionalType}`
+        createComponent(functionalTypePath, input.componentName, _component(input), err => {
           if (err) {
             callback(err)
           }
         })
       }
     })
-    const functionTypePath = `${baseAppPath}${input.appDomain}${input.componentName}/`
-    createComponent(functionTypePath, 'index', _index(input), err0 => {
+    const functionalTypePath = `${baseAppPath}${input.appDomain}${input.componentName}/`
+    createComponent(functionalTypePath, 'index', _index(input), err0 => {
       if (err0) {
         callback(err0)
         return
       }
-      createComponent(functionTypePath, 'container', _container(input), err1 => {
+      createComponent(functionalTypePath, 'container', _container(input), err1 => {
         if (err1) {
           callback(err1)
           return
         }
-        createComponent(functionTypePath, 'const', _const(input), err2 => {
+        createComponent(functionalTypePath, 'const', _const(input), err2 => {
           if (err2) {
             callback(err2)
             return
           }
-          createComponent(functionTypePath, 'actions', _actions(), err3 => {
+          createComponent(functionalTypePath, 'actions', _actions(), err3 => {
             if (err3) {
               callback(err3)
               return
             }
-            createComponent(functionTypePath, 'reducer', _reducer(), err4 => {
+            createComponent(functionalTypePath, 'reducer', _reducer(), err4 => {
               if (err4) {
                 callback(err4)
                 return
@@ -300,22 +302,22 @@ function generateFiles(input, functionTypes, callback) {
 }
 
 function start(callback) {
-  getUserInput((err, input, functionTypes) => {
+  getUserInput((err, input, functionalTypes) => {
     if (err) {
       callback(err)
       return
     }
-    callback(null, input, functionTypes)
+    callback(null, input, functionalTypes)
   })
 }
 
-start((err, input, functionTypes) => {
+start((err, input, functionalTypes) => {
   handleErr(err, 'Broke on start.')
-  handleErr(!input || !functionTypes, 'Broke on user input.')
-  if (input && functionTypes) {
+  handleErr(!input || !functionalTypes, 'Broke on user input.')
+  if (input && functionalTypes) {
     logger.log('info', chalk.green('Inputs accepted!'))
-    logger.log('info', chalk.green('Successfully scaffolded function type(s)!'))
-    generateFiles(input, functionTypes, __err => {
+    logger.log('info', chalk.green('Successfully scaffolded functional type(s)!'))
+    generateFiles(input, functionalTypes, __err => {
       handleErr(__err, 'Broke on component generation.')
       if (!__err) {
         logger.log('info', chalk.green('Successfully cranked out component(s)!'))
