@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 
-module.exports = {
+const files = {
   getCurrentDirectoryBase() {
     return path.basename(process.cwd())
   },
@@ -14,3 +14,5 @@ module.exports = {
     }
   },
 }
+
+export default files

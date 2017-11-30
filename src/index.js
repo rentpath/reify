@@ -15,6 +15,8 @@ import {
   _const,
   _actions,
   _reducer,
+  _selector,
+  _test,
 } from './templates'
 import files from './lib/files'
 import logger from './lib/logger'
@@ -22,7 +24,7 @@ import logger from './lib/logger'
 const Spinner = CLI.Spinner
 const functionalTypesChoices = ['actions', 'components', 'const', 'container', 'index', 'reducer', 'selectors', '__tests__']
 const componentTypesChoices = ['functional', 'class', 'connected']
-let appDomainChoices = ['small/', 'large/', 'shared/']
+let appDomainChoices = ['small', 'large', 'shared']
 let baseAppPath = './src/apps/'
 
 clear()
@@ -51,7 +53,7 @@ function handleErr(err, msg) {
   }
 }
 
-function postInput(input0, previous, callback) {
+function promptInputTwo(input0, previous, callback) {
   if (previous.appDomainChoices) {
     appDomainChoices = previous.appDomainChoices
   }
@@ -62,7 +64,7 @@ function postInput(input0, previous, callback) {
     {
       name: 'appDomain',
       type: 'checkbox',
-      message: 'Choose an appDomain',
+      message: 'Choose an appDomain:',
       choices: appDomainChoices,
       default: previous ? previous.appDomain : null,
       validate: makeValidator({
@@ -80,10 +82,10 @@ function postInput(input0, previous, callback) {
     {
       name: 'componentType',
       type: 'checkbox',
-      message: 'What component type should be used? :',
+      message: 'What component type should be created? :',
       choices: componentTypesChoices,
-      default: previous ? previous.componentType : null,
-      validate: makeValidator({ message: 'Please select what component type you want.' }),
+      default: previous ? previous.componentType : 'connected',
+      validate: makeValidator({ message: 'Please select what component type you want created.' }),
     },
   ]
   inquirer.prompt(questions).then(input1 => callback({ ...input0, ...input1 }))
@@ -104,7 +106,14 @@ function promptInputOne(input0, previous, callback0) {
         type: 'input',
         message: 'Input an appDomain name, which will be added to the choices.',
         default: 'genericAppDomainName',
-        validate: makeValidator({ message: 'No appDomain input was entered. Please try again.' }),
+        validate: makeValidator({
+          message: 'Please input a valid appDomain.',
+          specialRule: value => (
+            value.length &&
+            value.length > 1 &&
+            !/\s/.test(value)
+          ),
+        }),
       }).then(input3 => {
         const aggregate = { ...input2, ...input3 }
 
@@ -134,7 +143,7 @@ function promptInputOne(input0, previous, callback0) {
           cb(input5, cb)
           return
         }
-        postInput(input5, previous, callback0)
+        promptInputTwo(input5, previous, callback0)
       })
     }
 
@@ -142,7 +151,7 @@ function promptInputOne(input0, previous, callback0) {
       fireRecursion({ ...input0, ...input1 }, fireRecursion)
       return
     }
-    postInput({ ...input0, ...input1 }, previous, callback0)
+    promptInputTwo({ ...input0, ...input1 }, previous, callback0)
   })
 }
 
@@ -163,7 +172,13 @@ function promptInputZero(previous, callback) {
         default: previous ? previous.baseAppPath : './...',
         validate: makeValidator({
           message: 'Please input a valid path.',
-          specialRule: value => value.length && value.length > 1 && value.substring(0, 2) === './' && value.slice(-1) === '/',
+          specialRule: value => (
+            value.length &&
+            value.length > 1 &&
+            value.substring(0, 2) === './' &&
+            value.slice(-1) === '/' &&
+            !/\s/.test(value)
+          ),
         }),
       }).then(optInput => promptInputOne({ ...input, ...optInput }, previous, callback))
       return
@@ -173,12 +188,14 @@ function promptInputZero(previous, callback) {
 }
 
 function setupFunctionalTypes(input, functionalTypes, callback) {
-  const componentPath = `${baseAppPath}${input.appDomain}${input.componentName}`
+  const componentPath = `${baseAppPath}${input.appDomain}/${input.componentName}`
   handleErr(files.directoryExists(componentPath), `ERR: Already have that component! ${componentPath}`)
   shell.mkdir('-p', componentPath)
 
   functionalTypes.forEach(functionalType => {
-    if (functionalType === 'components') {
+    if (
+      functionalType === 'components' || functionalType === '__tests__'
+    ) {
       const functionalTypePath = `${componentPath}/${functionalType}`
       handleErr(files.directoryExists(functionalTypePath), `ERR: Already have that functional type! ${functionalType}`)
       shell.mkdir('-p', functionalTypePath)
@@ -248,53 +265,80 @@ function createComponent(functionalTypePath, fileName, component, callback) {
   callback(null)
 }
 
-function generateFiles(input, functionalTypes, callback) {
-  if (functionalTypes.length) {
-    const status = new Spinner('Generating the files...')
-    status.start()
-    functionalTypes.forEach(functionalType => {
-      if (functionalType === 'components') {
-        const functionalTypePath = `${baseAppPath}${input.appDomain}${input.componentName}/${functionalType}`
-        createComponent(functionalTypePath, input.componentName, _component(input), err => {
-          if (err) {
-            callback(err)
-          }
-        })
+function generateFiles(functionalTypes, input, callback) {
+  const componentPath = `${baseAppPath}${input.appDomain}/${input.componentName}/`
+  createComponent(
+    functionalTypes.component || componentPath,
+    input.componentName,
+    _component(input),
+    err => {
+      if (err) {
+        callback(err)
       }
-    })
-    const functionalTypePath = `${baseAppPath}${input.appDomain}${input.componentName}/`
-    createComponent(functionalTypePath, 'index', _index(input), err0 => {
-      if (err0) {
-        callback(err0)
-        return
-      }
-      createComponent(functionalTypePath, 'container', _container(input), err1 => {
-        if (err1) {
-          callback(err1)
+      createComponent(componentPath, 'index', _index(input), err0 => {
+        if (err0) {
+          callback(err0)
           return
         }
-        createComponent(functionalTypePath, 'const', _const(input), err2 => {
-          if (err2) {
-            callback(err2)
+        createComponent(componentPath, 'container', _container({ functionalTypes, input }), err1 => {
+          if (err1) {
+            callback(err1)
             return
           }
-          createComponent(functionalTypePath, 'actions', _actions(), err3 => {
-            if (err3) {
-              callback(err3)
+          createComponent(componentPath, 'const', _const(input), err2 => {
+            if (err2) {
+              callback(err2)
               return
             }
-            createComponent(functionalTypePath, 'reducer', _reducer(), err4 => {
-              if (err4) {
-                callback(err4)
+            createComponent(componentPath, 'actions', _actions(), err3 => {
+              if (err3) {
+                callback(err3)
                 return
               }
-              status.stop()
-              callback(null)
+              createComponent(componentPath, 'reducer', _reducer(), err4 => {
+                if (err4) {
+                  callback(err4)
+                  return
+                }
+                createComponent(componentPath, 'selector', _selector(input), err5 => {
+                  if (err5) {
+                    callback(err5)
+                    return
+                  }
+                  createComponent(
+                    functionalTypes.tests || componentPath,
+                    `${input.componentName}-test`,
+                    _test({ input, functionalTypes }),
+                    err6 => {
+                      if (err6) {
+                        callback(err6)
+                        return
+                      }
+                      callback(null)
+                    }
+                  )
+                })
+              })
             })
           })
         })
       })
+    }
+  )
+}
+
+function generateComponents(input, functionalTypes, callback) {
+  if (functionalTypes.length) {
+    const fts = {}
+    functionalTypes.forEach(ft => {
+      if (ft === 'components') {
+        fts.component = `${baseAppPath}${input.appDomain}/${input.componentName}/${ft}`
+      }
+      if (ft === '__tests__') {
+        fts.tests = `${baseAppPath}${input.appDomain}/${input.componentName}/${ft}`
+      }
     })
+    generateFiles(fts, input, callback)
     return
   }
   logger.log('info', 'nothing to do.')
@@ -317,9 +361,12 @@ start((err, input, functionalTypes) => {
   if (input && functionalTypes) {
     logger.log('info', chalk.green('Inputs accepted!'))
     logger.log('info', chalk.green('Successfully scaffolded functional type(s)!'))
-    generateFiles(input, functionalTypes, __err => {
+    const status = new Spinner('Generating the files...')
+    status.start()
+    generateComponents(input, functionalTypes, __err => {
       handleErr(__err, 'Broke on component generation.')
       if (!__err) {
+        status.stop()
         logger.log('info', chalk.green('Successfully cranked out component(s)!'))
       }
     })
