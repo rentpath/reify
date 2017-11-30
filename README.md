@@ -1,6 +1,6 @@
 # Reify Command Line Interface
 
-Reify CLI (reifycli) is a command line tool that lets developers crank out the basic common scaffolding necessary for connected React components in AG.js.
+Reify CLI (reifycli) is a command line tool that lets developers crank out the basic scaffolding necessary for common React / Redux components.
 
 Brief intro below.
 

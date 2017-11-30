@@ -1,7 +1,7 @@
 {
   "name": "reify",
   "version": "1.0.1",
-  "description": "Crank out the basic scaffolding necessary for connected React components in AG.js",
+  "description": "Crank out the basic scaffolding necessary for common React / Redux components",
   "main": "dist/index.js",
   "private": true,
   "scripts": {
