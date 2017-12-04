@@ -1,5 +1,5 @@
 {
-  "name": "reify",
+  "name": "reifycli",
   "version": "1.0.2",
   "description": "Crank out the basic scaffolding necessary for common React / Redux components",
   "main": "dist/index.js",
