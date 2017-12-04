@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import 'babel-polyfill'
 import chalk from 'chalk'
 import clear from 'clear'
 import CLI from 'clui'
@@ -7,10 +8,11 @@ import inquirer from 'inquirer'
 import Preferences from 'preferences'
 import shell from 'shelljs'
 import fs from 'fs'
-import { defineBaseAppPath, promptAppDomainChoices, promptAppDomain } from './messages'
+import { defineBaseAppPath, promptAppDomainChoices, promptAppDomain, promptDucksMessage, promptNestStructureMessage } from './messages'
 import {
   _index,
   _component,
+  _functional,
   _container,
   _const,
   _actions,
@@ -20,10 +22,16 @@ import {
 } from './templates'
 import files from './lib/files'
 import logger from './lib/logger'
+import {
+  ducksChoices,
+  componentParadigmChoices,
+  reduxComponentTypeChoices,
+  nestStructureChoices,
+  addAnotherChoices,
+} from './const'
 
 const Spinner = CLI.Spinner
-const functionalTypesChoices = ['actions', 'components', 'const', 'container', 'index', 'reducer', 'selectors', '__tests__']
-const componentTypesChoices = ['functional', 'class', 'connected']
+
 let appDomainChoices = ['small', 'large', 'shared']
 let baseAppPath = './src/apps/'
 
@@ -38,6 +46,10 @@ const makeValidator = opts => (value => {
   const conditional = opts.specialRule ? opts.specialRule(value) : value.length
 
   if (conditional) {
+    if (opts.nestedRule && opts.nestedRule(value)) {
+      return opts.nestedRuleMessage
+    }
+
     if (opts.nestedMessage && conditional > 1) {
       return opts.nestedMessage
     }
@@ -54,10 +66,10 @@ function handleErr(err, msg) {
 }
 
 function promptInputTwo(input0, previous, callback) {
-  if (previous.appDomainChoices) {
+  if (previous && previous.appDomainChoices) {
     appDomainChoices = previous.appDomainChoices
   }
-  if (input0.appDomainChoices) {
+  if (input0 && input0.appDomainChoices) {
     appDomainChoices = input0.appDomainChoices
   }
   const questions = [
@@ -66,7 +78,7 @@ function promptInputTwo(input0, previous, callback) {
       type: 'checkbox',
       message: 'Choose an appDomain:',
       choices: appDomainChoices,
-      default: previous ? previous.appDomain : null,
+      default: previous ? previous.appDomain : [appDomainChoices[0]],
       validate: makeValidator({
         message: 'Please choose an app domain to create component within.',
         nestedMessage: 'Please limit choice to one selection.',
@@ -76,16 +88,24 @@ function promptInputTwo(input0, previous, callback) {
       name: 'componentName',
       type: 'input',
       message: 'Input a component name:',
-      default: previous ? previous.componentName : null,
+      default: previous ? previous.componentName : 'MyGreatNewComponent',
       validate: makeValidator({ message: 'No name input was entered. Please try again.' }),
     },
     {
-      name: 'componentType',
-      type: 'checkbox',
-      message: 'What component type should be created? :',
-      choices: componentTypesChoices,
-      default: previous ? previous.componentType : 'connected',
-      validate: makeValidator({ message: 'Please select what component type you want created.' }),
+      name: 'componentParadigm',
+      type: 'list',
+      message: 'What ReactJS component paradigm should be used by the component to be created?',
+      choices: componentParadigmChoices,
+      default: previous ? previous.componentParadigm : componentParadigmChoices[0],
+      validate: makeValidator({ message: 'Please select what component paradigm you want used.' }),
+    },
+    {
+      name: 'reduxComponentType',
+      type: 'list',
+      message: 'What redux component type should be used?',
+      choices: reduxComponentTypeChoices,
+      default: previous ? previous.reduxComponentType : reduxComponentTypeChoices[0],
+      validate: makeValidator({ message: 'Please select what redux type you want used.' }),
     },
   ]
   inquirer.prompt(questions).then(input1 => callback({ ...input0, ...input1 }))
@@ -126,8 +146,8 @@ function promptInputOne(input0, previous, callback0) {
             type: 'checkbox',
             name: 'addAnother',
             message: promptAppDomain(aggregate.appDomainChoices),
-            choices: ['Yes, add more appDomains.', 'No, the list is fully populated. Move to next step.'],
-            default: 'No, the list is fully populated. Move to next step.',
+            choices: addAnotherChoices,
+            default: addAnotherChoices[1],
             validate: makeValidator({
               message: 'Please choose to keep adding appDomains or move on.',
               nestedMessage: 'Please limit choice to one selection.',
@@ -139,7 +159,7 @@ function promptInputOne(input0, previous, callback0) {
 
     const fireRecursion = (inp, cb) => {
       promptRecursive(inp, input5 => {
-        if (input5.addAnother[0] === 'Yes, add more appDomains.') {
+        if (input5.addAnother[0] === addAnotherChoices[0]) {
           cb(input5, cb)
           return
         }
@@ -187,36 +207,57 @@ function promptInputZero(previous, callback) {
   })
 }
 
-function setupFunctionalTypes(input, functionalTypes, callback) {
+function setupDucks(_input, callback) {
+  const input = { ..._input, ducks: [..._input.ducks, 'components', 'index', '__tests__'] }
   const componentPath = `${baseAppPath}${input.appDomain}/${input.componentName}`
   handleErr(files.directoryExists(componentPath), `ERR: Already have that component! ${componentPath}`)
   shell.mkdir('-p', componentPath)
 
-  functionalTypes.forEach(functionalType => {
-    if (
-      functionalType === 'components' || functionalType === '__tests__'
-    ) {
-      const functionalTypePath = `${componentPath}/${functionalType}`
-      handleErr(files.directoryExists(functionalTypePath), `ERR: Already have that functional type! ${functionalType}`)
-      shell.mkdir('-p', functionalTypePath)
-    }
-  })
-  callback(null, functionalTypes)
+  if (input.ducks && input.nestStructure === nestStructureChoices[0]) {
+    input.ducks.forEach(duck => {
+      if (
+        duck === 'components' || duck === '__tests__' || duck === 'selectors'
+      ) {
+        const duckPath = `${componentPath}/${duck}`
+        handleErr(files.directoryExists(duckPath), `ERR: Already have that duck! ${duck}`)
+        shell.mkdir('-p', duckPath)
+      }
+    })
+  }
+  callback(null, input)
 }
 
-function promptFunctionalTypes(previous, input, callback) {
+function promptDucks(previous, input, callback) {
   inquirer.prompt([
     {
       type: 'checkbox',
-      name: 'functionalTypes',
-      message: 'Select the functional types you wish to be created:',
-      choices: functionalTypesChoices,
-      default: previous || ['components'],
-      validate: makeValidator({ message: 'Please choose a functional type or several.' }),
+      name: 'ducks',
+      message: promptDucksMessage(),
+      choices: ducksChoices,
+      default: previous ? previous.ducks : ducksChoices[0],
+      validate: makeValidator({
+        message: 'Please choose an option, or several.',
+        nestedRule: value => (
+          value.length > 1 && value.includes(ducksChoices[0])
+        ),
+        nestedRuleMessage: 'Cannot pick ducks and "none". Unselect the "none" option, or the extra ducks.',
+      }),
     },
-  ]).then(answer => {
-    if (answer.functionalTypes.length) {
-      setupFunctionalTypes(input, answer.functionalTypes, callback)
+  ]).then(answer0 => {
+    if (answer0.ducks.length) {
+      inquirer.prompt([
+        {
+          type: 'list',
+          name: 'nestStructure',
+          message: promptNestStructureMessage(),
+          choices: nestStructureChoices,
+          default: previous ? previous.nestStructure : [nestStructureChoices[0]],
+          validate: makeValidator({
+            message: 'Please choose to place ducks in subdirs, or toss them all into one directory.',
+            nestedMessage: 'Please limit choice to one selection.',
+          }),
+        },
+      ]).then(answer1 => setupDucks({ ...input, ...answer0, ...answer1 }, callback))
       return
     }
     logger.log('info', 'nothing to do.')
@@ -229,7 +270,7 @@ function getUserInput(callback) {
 
   logger.log('debug', `Reify prefs. ${JSON.stringify(prefs.saved)}`)
 
-  promptInputZero(prefs.saved && prefs.saved.input, input => {
+  promptInputZero(prefs && prefs.saved && prefs.saved.input, input => {
     if (input) {
       if (prefs.saved && prefs.saved.input && prefs.saved.input.baseAppPath) {
         baseAppPath = prefs.saved.input.baseAppPath
@@ -237,20 +278,20 @@ function getUserInput(callback) {
       if (input.defineBaseAppPath && input.baseAppPath) {
         baseAppPath = input.baseAppPath
       }
-      promptFunctionalTypes(
-        prefs.saved && prefs.saved.functionalTypes,
+      promptDucks(
+        prefs.saved && prefs.saved.input,
         input,
-        (err, functionalTypes) => {
-          if (functionalTypes) {
+        (err, _input) => {
+          if (_input.ducks) {
             const status = new Spinner('Storing prefs, please wait...')
             status.start()
-            prefs.saved = { input, functionalTypes }
+            prefs.saved = { input: _input }
             logger.log('debug', `items stored: ${JSON.stringify(prefs.saved)}`)
             status.stop()
-            callback(null, input, functionalTypes)
+            callback(null, _input)
             return
           }
-          callback('No functional types created.')
+          callback('No ducks created.')
         }
       )
       return
@@ -259,86 +300,56 @@ function getUserInput(callback) {
   })
 }
 
-function createComponent(functionalTypePath, fileName, component, callback) {
-  handleErr(files.directoryExists(!files.directoryExists(functionalTypePath)), `ERR: That directory didn't exist! ${functionalTypePath}`)
-  fs.writeFileSync(`${functionalTypePath}/${fileName}.js`, component)
+async function createComponent(duckPath, fileName, component) {
+  handleErr(files.directoryExists(!files.directoryExists(duckPath)), `ERR: That directory didn't exist! ${duckPath}`)
+  await fs.writeFileSync(`${duckPath}/${fileName}.js`, component)
+}
+
+async function generateFiles(duckPaths, input, callback) {
+  const componentPath = `${baseAppPath}${input.appDomain}/${input.componentName}/`
+  await createComponent(
+    input.nestStructure === nestStructureChoices[0] && duckPaths.components ?
+      duckPaths.components : componentPath,
+    input.componentName,
+    input.componentParadigm === componentParadigmChoices[1] ?
+      _functional(input) : _component(input)
+  )
+  await createComponent(componentPath, 'index', _index({ duckPaths, input }))
+  await createComponent(
+    duckPaths.__tests__ || componentPath,
+    `${input.componentName}-test`,
+    _test({ input, duckPaths })
+  )
+  if (input.reduxComponentType === reduxComponentTypeChoices[0]) {
+    await createComponent(componentPath, 'container', _container({ duckPaths, input }))
+  }
+  if (input.ducks.indexOf('const') !== -1) {
+    await createComponent(componentPath, 'const', _const(input))
+  }
+  if (input.ducks.indexOf('actions') !== -1) {
+    await createComponent(componentPath, 'actions', _actions())
+  }
+  if (input.ducks.indexOf('reducer') !== -1) {
+    await createComponent(componentPath, 'reducer', _reducer())
+  }
+  if (input.ducks.indexOf('selectors') !== -1) {
+    await createComponent(duckPaths.selectors || componentPath, 'selector', _selector(input))
+  }
   callback(null)
 }
 
-function generateFiles(functionalTypes, input, callback) {
-  const componentPath = `${baseAppPath}${input.appDomain}/${input.componentName}/`
-  createComponent(
-    functionalTypes.component || componentPath,
-    input.componentName,
-    _component(input),
-    err => {
-      if (err) {
-        callback(err)
-      }
-      createComponent(componentPath, 'index', _index(input), err0 => {
-        if (err0) {
-          callback(err0)
-          return
-        }
-        createComponent(componentPath, 'container', _container({ functionalTypes, input }), err1 => {
-          if (err1) {
-            callback(err1)
-            return
-          }
-          createComponent(componentPath, 'const', _const(input), err2 => {
-            if (err2) {
-              callback(err2)
-              return
-            }
-            createComponent(componentPath, 'actions', _actions(), err3 => {
-              if (err3) {
-                callback(err3)
-                return
-              }
-              createComponent(componentPath, 'reducer', _reducer(), err4 => {
-                if (err4) {
-                  callback(err4)
-                  return
-                }
-                createComponent(componentPath, 'selector', _selector(input), err5 => {
-                  if (err5) {
-                    callback(err5)
-                    return
-                  }
-                  createComponent(
-                    functionalTypes.tests || componentPath,
-                    `${input.componentName}-test`,
-                    _test({ input, functionalTypes }),
-                    err6 => {
-                      if (err6) {
-                        callback(err6)
-                        return
-                      }
-                      callback(null)
-                    }
-                  )
-                })
-              })
-            })
-          })
-        })
+function generateComponents(input, callback) {
+  if (
+    input.ducks && input.ducks.length
+  ) {
+    const duckPaths = {}
+
+    if (input.nestStructure === nestStructureChoices[0]) {
+      input.ducks.forEach(duck => {
+        duckPaths[duck] = `${baseAppPath}${input.appDomain}/${input.componentName}/${duck}`
       })
     }
-  )
-}
-
-function generateComponents(input, functionalTypes, callback) {
-  if (functionalTypes.length) {
-    const fts = {}
-    functionalTypes.forEach(ft => {
-      if (ft === 'components') {
-        fts.component = `${baseAppPath}${input.appDomain}/${input.componentName}/${ft}`
-      }
-      if (ft === '__tests__') {
-        fts.tests = `${baseAppPath}${input.appDomain}/${input.componentName}/${ft}`
-      }
-    })
-    generateFiles(fts, input, callback)
+    generateFiles(duckPaths, input, callback)
     return
   }
   logger.log('info', 'nothing to do.')
@@ -346,24 +357,24 @@ function generateComponents(input, functionalTypes, callback) {
 }
 
 function start(callback) {
-  getUserInput((err, input, functionalTypes) => {
+  getUserInput((err, input) => {
     if (err) {
       callback(err)
       return
     }
-    callback(null, input, functionalTypes)
+    callback(null, input)
   })
 }
 
-start((err, input, functionalTypes) => {
+start((err, input) => {
   handleErr(err, 'Broke on start.')
-  handleErr(!input || !functionalTypes, 'Broke on user input.')
-  if (input && functionalTypes) {
+  handleErr(!input, 'Broke on user input.')
+  if (input) {
     logger.log('info', chalk.green('Inputs accepted!'))
-    logger.log('info', chalk.green('Successfully scaffolded functional type(s)!'))
+    logger.log('info', chalk.green('Successfully scaffolded duck(s)!'))
     const status = new Spinner('Generating the files...')
     status.start()
-    generateComponents(input, functionalTypes, __err => {
+    generateComponents(input, __err => {
       handleErr(__err, 'Broke on component generation.')
       if (!__err) {
         status.stop()
