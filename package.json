@@ -1,9 +1,9 @@
 {
   "name": "reify",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Crank out the basic scaffolding necessary for common React / Redux components",
   "main": "dist/index.js",
-  "private": true,
+  "private": false,
   "scripts": {
     "start": "babel-node src/index.js",
     "remove-dist": "node_modules/.bin/rimraf ./dist",
@@ -23,8 +23,18 @@
     "CLI"
   ],
   "author": "Joe Costanzo, RentPath, et al",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rentpath/reify.git"
+  },
+  "bugs": {
+    "url": "https://github.com/rentpath/reify/issues"
+  },
+  "homepage": "https://github.com/rentpath/reify#readme",
   "license": "MIT",
   "dependencies": {
+    "babel-plugin-transform-runtime": "^6.23.0",
+    "babel-polyfill": "^6.26.0",
     "babel-preset-stage-0": "^6.24.1",
     "chalk": "^2.3.0",
     "clear": "0.0.1",
